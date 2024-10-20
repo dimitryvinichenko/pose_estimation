@@ -13,7 +13,7 @@ wget -O pose_landmarker.task -q https://storage.googleapis.com/mediapipe-models/
 ```
 
 ```bash
-python3 mane.py --input some_input_video.mp4 --output some_output_video.mp4 
+python3 mane.py --input input_video.mp4 --output output_video.mp4 
 ```
 
 
