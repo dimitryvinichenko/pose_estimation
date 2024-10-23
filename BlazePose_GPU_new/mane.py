@@ -44,8 +44,8 @@ options = PoseLandmarkerOptions(
         model_asset_path='pose_landmarker.task',
         delegate=BaseOptions.Delegate.GPU
     ),
-    running_mode=VisionRunningMode.IMAGE, 
-    # min_pose_detection_confidence=0.9,
+    running_mode=VisionRunningMode.VIDEO,
+    min_pose_detection_confidence=0.9,
     min_tracking_confidence=0.9
 )
 
@@ -74,8 +74,7 @@ with PoseLandmarker.create_from_options(options) as landmarker:
     for frame in range(frame_count):
         _, image = cap.read()
         mp_image = mp.Image(image_format=mp.ImageFormat.SRGBA, data=cv2.cvtColor(image, cv2.COLOR_BGR2RGBA))
-        # mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=image)
-        result = landmarker.detect(mp_image)
+        result = landmarker.detect_for_video(mp_image, int(frame * 1000.0 / fps))
         results.append(result)
 
     print(f'Duration: {duration}')
@@ -87,8 +86,13 @@ with PoseLandmarker.create_from_options(options) as landmarker:
         
         _, image = cap.read()
         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=image)
+
+        # Annotate the frame with landmarks
         annotated_image = draw_landmarks_on_image(mp_image.numpy_view(), results[frame])
+
+        # Write the annotated frame to the output video
         out.write(annotated_image)
+
 
 
 
