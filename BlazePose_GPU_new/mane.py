@@ -1,3 +1,29 @@
+# import subprocess
+# import sys
+
+# def install(package):
+#     subprocess.check_call([sys.executable, "-m", "pip", "install", package])
+
+# try:
+#     install('numpy==1.26.4')
+# except:
+#     print('Numpy installation issue')
+
+# try:
+#     install('mediapipe==0.10.15')
+# except:
+#     print('mediapipe installation issue')
+
+# try:
+#     install('opencv-contrib-python==4.10.0.84')
+# except:
+#     print('opencv-contrib installation issue')
+
+# url = 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_heavy/float16/1/pose_landmarker_heavy.task'
+# subprocess.run(["wget", "-O", "pose_landmarker.task", "-q", url])
+
+
+
 import mediapipe as mp
 import cv2
 from mediapipe import solutions
