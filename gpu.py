@@ -5,32 +5,41 @@ def install(package):
     subprocess.check_call([sys.executable, "-m", "pip", "install", package])
 
 try:
+    import numpy as np
+    import mediapipe as mp
+    import cv2
+
+except ImportError:
     install('numpy==1.26.4')
-except:
-    print('Numpy installation issue')
+    import numpy as np
 
-try:
     install('mediapipe==0.10.15')
-except:
-    print('mediapipe installation issue')
+    import mediapipe as mp
 
-try:
     install('opencv-contrib-python==4.10.0.84')
-except:
-    print('opencv-contrib installation issue')
-
-url = 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_heavy/float16/1/pose_landmarker_heavy.task'
-subprocess.run(["wget", "-O", "pose_landmarker.task", "-q", url])
+    import cv2
 
 
-
-import mediapipe as mp
-import cv2
 from mediapipe import solutions
 from mediapipe.framework.formats import landmark_pb2
-import numpy as np
 import time
 import argparse
+
+from mediapipe.tasks.python.core.base_options import BaseOptions
+from mediapipe.tasks.python.vision.pose_landmarker import PoseLandmarker
+from mediapipe.tasks.python.vision.pose_landmarker import PoseLandmarkerOptions
+from mediapipe.tasks.python.vision.core.vision_task_running_mode import VisionTaskRunningMode as RunningMode
+
+from urllib.request import urlretrieve
+
+# load model
+import os
+
+if not os.path.isfile("pose_landmarker_heavy.task"):
+
+    url = 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_heavy/float16/1/pose_landmarker_heavy.task'
+    dst = 'pose_landmarker_heavy.task'
+    urlretrieve(url, dst)
 
 
 args = argparse.ArgumentParser()
@@ -38,7 +47,6 @@ args.add_argument('--input', type=str, default='input.mp4')
 args.add_argument('--output', type=str, default='output.mp4')
 
 args = args.parse_args()
-
 
 def draw_landmarks_on_image(rgb_image, detection_result):
     pose_landmarks_list = detection_result.pose_landmarks
@@ -60,19 +68,14 @@ def draw_landmarks_on_image(rgb_image, detection_result):
         solutions.drawing_styles.get_default_pose_landmarks_style())
     return annotated_image
 
-BaseOptions = mp.tasks.BaseOptions
-PoseLandmarker = mp.tasks.vision.PoseLandmarker
-PoseLandmarkerOptions = mp.tasks.vision.PoseLandmarkerOptions
-VisionRunningMode = mp.tasks.vision.RunningMode
-
 options = PoseLandmarkerOptions(
     base_options=BaseOptions(
-        model_asset_path='pose_landmarker.task',
+        model_asset_path='pose_landmarker_heavy.task',
         delegate=BaseOptions.Delegate.GPU
     ),
-    running_mode=VisionRunningMode.VIDEO,
-    min_pose_detection_confidence=0.9,
-    min_tracking_confidence=0.9
+    running_mode=RunningMode.VIDEO,
+    # min_pose_detection_confidence=0.9,
+    # min_tracking_confidence=0.9
 )
 
 
