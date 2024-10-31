@@ -1,35 +1,13 @@
-import subprocess
 import sys
-import traceback
-
-def install(package):
-    subprocess.check_call([sys.executable, "-m", "pip", "install", package])
-
-try:
-
-    import cv2
-    from tqdm import tqdm
-    import mediapipe.python.solutions.pose as mp
-    import mediapipe.python.solutions.drawing_utils as du
-
-except ImportError:
-    install('tqdm')
-    from tqdm import tqdm
-
-    install('mediapipe')
-    import mediapipe.python.solutions.pose as mp
-    import mediapipe.python.solutions.drawing_utils as du
-
-    install('opencv-contrib-python')
-    import cv2
+import tqdm
+import cv2
+import mediapipe.python.solutions.pose as mp
+import mediapipe.python.solutions.drawing_utils as du
 
 
-def process_video_cpu(input_file: str, output_file: str) -> None:
-    """Рисует позу человека на кажом кадре (CPU)"""
+def draw_pose_to_video(input_file="input.mp4", output_file="output.mp4"):
     cap = cv2.VideoCapture()
-    ok = cap.open(input_file)
-
-    assert ok, "can`t open file"
+    assert cap.open(input_file), "can`t open file"
 
     fps = int(cap.get(cv2.CAP_PROP_FPS))
     frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
@@ -42,11 +20,10 @@ def process_video_cpu(input_file: str, output_file: str) -> None:
                              fps=fps,
                              frameSize=(frame_width, frame_height))
 
-    detector = mp.Pose(enable_segmentation=False,
-                       model_complexity=0)
+    detector = mp.Pose(enable_segmentation=False, model_complexity=0)
 
     poses = [None]*frame_count
-    for i in tqdm(range(frame_count), desc="Detect"):
+    for i in tqdm.tqdm(range(frame_count)):
         ok, img = cap.read()
         if not ok:
             continue
@@ -55,7 +32,7 @@ def process_video_cpu(input_file: str, output_file: str) -> None:
 
     cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
 
-    for i in tqdm(range(frame_count), desc="Draw"):
+    for i in range(frame_count):
         ok, img = cap.read()
         if not ok:
             continue
@@ -72,7 +49,12 @@ def process_video_cpu(input_file: str, output_file: str) -> None:
 
 
 if __name__ == "__main__":
-    try:
-        process_video_cpu(sys.argv[1], "bar.mp4")
-    except Exception as e:
-        print(traceback.format_exc())
+    input_file = "input.mp4"
+    if len(sys.argv) > 1:
+        input_file = sys.argv[1]
+
+    output_file = "output.mp4"
+    if len(sys.argv) > 2:
+        output_file = sys.argv[2]
+
+    draw_pose_to_video(input_file, output_file)
