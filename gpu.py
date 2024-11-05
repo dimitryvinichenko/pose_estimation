@@ -1,131 +1,94 @@
-import subprocess
 import sys
+import os
+import cv2
+import tqdm
 
-def install(package):
-    subprocess.check_call([sys.executable, "-m", "pip", "install", package])
+import mediapipe as mp
+import mediapipe.python.solutions.pose as sp
+import mediapipe.python.solutions.drawing_utils as du
 
-try:
-    import numpy as np
-    import mediapipe as mp
-    import cv2
-
-except ImportError:
-    install('numpy==1.26.4')
-    import numpy as np
-
-    install('mediapipe==0.10.15')
-    import mediapipe as mp
-
-    install('opencv-contrib-python==4.10.0.84')
-    import cv2
-
-
-from mediapipe import solutions
 from mediapipe.framework.formats import landmark_pb2
-import time
-import argparse
-
 from mediapipe.tasks.python.core.base_options import BaseOptions
-from mediapipe.tasks.python.vision.pose_landmarker import PoseLandmarker
-from mediapipe.tasks.python.vision.pose_landmarker import PoseLandmarkerOptions
+from mediapipe.tasks.python.vision.pose_landmarker import PoseLandmarker, PoseLandmarkerOptions
 from mediapipe.tasks.python.vision.core.vision_task_running_mode import VisionTaskRunningMode as RunningMode
 
 from urllib.request import urlretrieve
 
-# load model
-import os
-
-if not os.path.isfile("pose_landmarker_heavy.task"):
-
-    url = 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_heavy/float16/1/pose_landmarker_heavy.task'
-    dst = 'pose_landmarker_heavy.task'
-    urlretrieve(url, dst)
 
 
-args = argparse.ArgumentParser()
-args.add_argument('--input', type=str, default='input.mp4')
-args.add_argument('--output', type=str, default='output.mp4')
+def convert_landmarks(detection_result):
+    normalized = landmark_pb2.NormalizedLandmarkList()
+    for v in detection_result.pose_landmarks:
+        normalized.landmark.extend([landmark_pb2.NormalizedLandmark(x=u.x, y=u.y, z=u.z) for u in v])
 
-args = args.parse_args()
-
-def draw_landmarks_on_image(rgb_image, detection_result):
-    pose_landmarks_list = detection_result.pose_landmarks
-    annotated_image = np.copy(rgb_image)
-
-    # Loop through the detected poses to visualize.
-    for idx in range(len(pose_landmarks_list)):
-        pose_landmarks = pose_landmarks_list[idx]
-
-        # Draw the pose landmarks.
-        pose_landmarks_proto = landmark_pb2.NormalizedLandmarkList()
-        pose_landmarks_proto.landmark.extend([
-        landmark_pb2.NormalizedLandmark(x=landmark.x, y=landmark.y, z=landmark.z) for landmark in pose_landmarks
-        ])
-        solutions.drawing_utils.draw_landmarks(
-        annotated_image,
-        pose_landmarks_proto,
-        solutions.pose.POSE_CONNECTIONS,
-        solutions.drawing_styles.get_default_pose_landmarks_style())
-    return annotated_image
-
-options = PoseLandmarkerOptions(
-    base_options=BaseOptions(
-        model_asset_path='pose_landmarker_heavy.task',
-        delegate=BaseOptions.Delegate.GPU
-    ),
-    running_mode=RunningMode.VIDEO,
-    # min_pose_detection_confidence=0.9,
-    # min_tracking_confidence=0.9
-)
+    return normalized
 
 
-with PoseLandmarker.create_from_options(options) as landmarker:
-
-    video = str(args.input)
-    cap = cv2.VideoCapture(video)
-
-    # video duration
-    fps = cap.get(cv2.CAP_PROP_FPS)      # OpenCV v2.x used "CV_CAP_PROP_FPS"
-    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    duration = frame_count/fps
-
-    # Get actual frame width and height from the input video
-    frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')  # or use 'XVID'
-    out = cv2.VideoWriter(args.output, fourcc, fps, (frame_width, frame_height))
-
-    start = time.time()
-
-    results = []
-
-    for frame in range(frame_count):
-        _, image = cap.read()
-        mp_image = mp.Image(image_format=mp.ImageFormat.SRGBA, data=cv2.cvtColor(image, cv2.COLOR_BGR2RGBA))
-        result = landmarker.detect_for_video(mp_image, int(frame * 1000.0 / fps))
-        results.append(result)
-
-    print(f'Duration: {duration}')
-    print(f'Processing time: {time.time() - start}')
-
-    cap = cv2.VideoCapture(video)
-
-    for frame in range(frame_count):
-        
-        _, image = cap.read()
-        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=image)
-
-        # Annotate the frame with landmarks
-        annotated_image = draw_landmarks_on_image(mp_image.numpy_view(), results[frame])
-
-        # Write the annotated frame to the output video
-        out.write(annotated_image)
+def ensure_file(file, url):
+    if os.path.isfile(file):
+        return
+    urlretrieve(url, file)
 
 
+def draw_pose_to_video(input_file="input.mp4", output_file="output.mp4"):
+
+    task_url = 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_heavy/float16/1/pose_landmarker_heavy.task'
+    model_file = 'pose_landmarker_heavy.task'
+
+    ensure_file(file=model_file, url=task_url)
+
+    options = BaseOptions(model_asset_path=model_file, delegate=BaseOptions.Delegate.GPU)
+    options = PoseLandmarkerOptions(base_options=options, running_mode=RunningMode.VIDEO)
+
+    with PoseLandmarker.create_from_options(options) as landmarker:
+        cap = cv2.VideoCapture()
+        assert cap.open(input_file), "can`t open file"
+
+        fps = int(cap.get(cv2.CAP_PROP_FPS))
+        frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        writer = cv2.VideoWriter(filename=output_file,
+                                 fourcc=fourcc,
+                                 fps=fps,
+                                 frameSize=(frame_width, frame_height))
+        poses = [None]*frame_count
+        for i in tqdm.tqdm(range(frame_count)):
+            ok, img = cap.read()
+            if not ok:
+                continue
+
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGBA)
+            mp_image = mp.Image(image_format=mp.ImageFormat.SRGBA, data=img)
+            ts = int(i * 1000.0 / fps)
+            poses[i] = landmarker.detect_for_video(mp_image, ts)
+
+        cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+        for i in range(frame_count):
+            ok, img = cap.read()
+            if not ok:
+                continue
+
+            pose = poses[i]
+            if pose is not None:
+                du.draw_landmarks(image=img,
+                                  landmark_list=convert_landmarks(pose),
+                                  connections=sp.POSE_CONNECTIONS)
+            writer.write(img)
+
+        cap.release()
+        writer.release()
 
 
-    cap.release()
-    cv2.destroyAllWindows()
+if __name__ == "__main__":
+    input_file = "input.mp4"
+    if len(sys.argv) > 1:
+        input_file = sys.argv[1]
 
+    output_file = "output.mp4"
+    if len(sys.argv) > 2:
+        output_file = sys.argv[2]
 
+    draw_pose_to_video(input_file, output_file)
